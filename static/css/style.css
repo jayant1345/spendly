@@ -509,7 +509,9 @@ a { color: inherit; text-decoration: none; }
 
 .footer-links {
     display: flex;
-    gap: 1.2rem;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.4rem;
     font-size: 0.8rem;
 }
 
