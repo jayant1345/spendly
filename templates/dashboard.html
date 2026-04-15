@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard — Spendly{% endblock %}
+
+{% block content %}
+<section class="auth-section">
+    <div class="auth-container">
+        <div class="auth-header">
+            <h1 class="auth-title">Your Dashboard</h1>
+            <p class="auth-subtitle">
+                Welcome, {{ session.get('user_name') }}!
+                Full dashboard coming soon.
+            </p>
+        </div>
+    </div>
+</section>
+{% endblock %}
