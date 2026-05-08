@@ -33,6 +33,8 @@ def login_required(f):
 
 @app.route("/")
 def landing():
+    if session.get("user_id"):
+        return redirect(url_for("dashboard"))
     return render_template("landing.html")
 
 
@@ -131,7 +133,7 @@ def login():
 # Placeholder routes — students will implement these                  #
 # ------------------------------------------------------------------ #
 
-@app.route("/logout")
+@app.route("/logout", methods=["POST"])
 def logout():
     session.clear()
     return redirect(url_for("landing"))
