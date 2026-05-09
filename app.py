@@ -1,5 +1,6 @@
 import os
 import functools
+from datetime import datetime
 
 from flask import Flask, render_template, request, redirect, url_for, session
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -22,7 +23,7 @@ def login_required(f):
     @functools.wraps(f)
     def decorated(*args, **kwargs):
         if not session.get("user_id"):
-            return redirect(url_for("login"))
+            return redirect(url_for("login", next=request.path))
         return f(*args, **kwargs)
     return decorated
 
@@ -95,7 +96,80 @@ def register():
 @app.route("/dashboard")
 @login_required
 def dashboard():
-    return render_template("dashboard.html")
+    uid = session["user_id"]
+    db = get_db()
+    try:
+        user_row = db.execute(
+            "SELECT name, email, created_at FROM users WHERE id = ?", (uid,)
+        ).fetchone()
+        agg = db.execute(
+            "SELECT COUNT(*) as cnt, COALESCE(SUM(amount), 0) as total "
+            "FROM expenses WHERE user_id = ?", (uid,)
+        ).fetchone()
+        top_row = db.execute(
+            "SELECT category FROM expenses WHERE user_id = ? "
+            "GROUP BY category ORDER BY COUNT(*) DESC LIMIT 1", (uid,)
+        ).fetchone()
+        expense_rows = db.execute(
+            "SELECT date, description, category, amount FROM expenses "
+            "WHERE user_id = ? ORDER BY date DESC", (uid,)
+        ).fetchall()
+        cat_rows = db.execute(
+            "SELECT category, SUM(amount) as subtotal FROM expenses "
+            "WHERE user_id = ? GROUP BY category ORDER BY subtotal DESC", (uid,)
+        ).fetchall()
+    finally:
+        db.close()
+
+    parts = user_row["name"].split()
+    initials = "".join(p[0].upper() for p in parts[:2])
+
+    def fmt_date(iso):
+        try:
+            return datetime.strptime(iso, "%Y-%m-%d").strftime("%d %b %Y")
+        except (ValueError, TypeError):
+            return iso
+
+    try:
+        joined = datetime.strptime(user_row["created_at"], "%Y-%m-%d %H:%M:%S").strftime("%d %b %Y")
+    except (ValueError, TypeError):
+        joined = user_row["created_at"]
+
+    total = agg["total"]
+    user = {
+        "name": user_row["name"],
+        "email": user_row["email"],
+        "joined": joined,
+        "initials": initials,
+    }
+    stats = {
+        "total_spent": f"₹{total:,.2f}",
+        "transaction_count": agg["cnt"],
+        "top_category": top_row["category"] if top_row else "—",
+    }
+    expenses = [
+        {
+            "date": fmt_date(e["date"]),
+            "description": e["description"] or "—",
+            "category": e["category"],
+            "amount": f"₹{e['amount']:,.2f}",
+        }
+        for e in expense_rows
+    ]
+    breakdown = []
+    for c in cat_rows:
+        pct = round(c["subtotal"] / total * 100) if total else 0
+        breakdown.append({
+            "category": c["category"],
+            "amount": f"₹{c['subtotal']:,.2f}",
+            "pct": pct,
+        })
+
+    return render_template(
+        "dashboard.html",
+        user=user, stats=stats,
+        expenses=expenses, breakdown=breakdown,
+    )
 
 
 @app.route("/login", methods=["GET", "POST"])
@@ -122,11 +196,15 @@ def login():
                 else:
                     session["user_id"]   = user["id"]
                     session["user_name"] = user["name"]
+                    next_url = request.args.get("next", "")
+                    if next_url and next_url.startswith("/"):
+                        return redirect(next_url)
                     return redirect(url_for("dashboard"))
             finally:
                 db.close()
 
-    return render_template("login.html", error=error)
+    next_url = request.args.get("next", "")
+    return render_template("login.html", error=error, next_url=next_url)
 
 
 # ------------------------------------------------------------------ #
@@ -140,8 +218,9 @@ def logout():
 
 
 @app.route("/profile")
+@login_required
 def profile():
-    return "Profile page — coming in Step 4"
+    return redirect(url_for("dashboard"))
 
 
 @app.route("/expenses/add")

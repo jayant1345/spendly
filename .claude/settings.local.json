@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "WebSearch"
+      "WebSearch",
+      "PowerShell(venv\\\\Scripts\\\\python.exe -c \"import app; print\\('OK'\\)\")",
+      "Bash(venv/Scripts/python.exe *)"
     ]
   }
 }

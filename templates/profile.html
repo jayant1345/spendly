@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Dashboard — Spendly{% endblock %}
+{% block title %}Profile — Spendly{% endblock %}
 
 {% block content %}
 <div class="profile-page">
@@ -32,8 +32,8 @@
     <div class="profile-bottom">
 
       <div class="profile-section">
-        <h2 class="profile-section-title">All Expenses</h2>
-        {% if expenses %}
+        <h2 class="profile-section-title">Recent Transactions</h2>
+        {% if transactions %}
         <div class="profile-table-wrap">
           <table class="profile-table">
             <thead>
@@ -45,21 +45,21 @@
               </tr>
             </thead>
             <tbody>
-              {% for e in expenses %}
+              {% for tx in transactions %}
               <tr>
-                <td>{{ e.date }}</td>
-                <td>{{ e.description }}</td>
+                <td>{{ tx.date }}</td>
+                <td>{{ tx.description }}</td>
                 <td>
-                  <span class="category-badge badge-{{ e.category | lower }}">{{ e.category }}</span>
+                  <span class="category-badge badge-{{ tx.category | lower }}">{{ tx.category }}</span>
                 </td>
-                <td class="col-amount"><span class="tx-amount">{{ e.amount }}</span></td>
+                <td class="col-amount"><span class="tx-amount">{{ tx.amount }}</span></td>
               </tr>
               {% endfor %}
             </tbody>
           </table>
         </div>
         {% else %}
-        <p class="empty-state">No expenses yet. Start tracking your spending!</p>
+        <p class="empty-state">No expenses recorded yet.</p>
         {% endif %}
       </div>
 
