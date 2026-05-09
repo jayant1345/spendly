@@ -1,5 +1,6 @@
 import os
 import functools
+from datetime import datetime
 
 from flask import Flask, render_template, request, redirect, url_for, session
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -140,8 +141,40 @@ def logout():
 
 
 @app.route("/profile")
+@login_required
 def profile():
-    return "Profile page — coming in Step 4"
+    user = {
+        "name": "Priya Sharma",
+        "email": "priya.sharma@example.com",
+        "joined": "January 2026",
+    }
+    stats = {
+        "total_spent": "₹8,430.00",
+        "transaction_count": 12,
+        "top_category": "Food",
+    }
+    transactions = [
+        {"date": "2026-05-05", "description": "Grocery run",       "category": "Food",          "amount": "₹320.00"},
+        {"date": "2026-05-04", "description": "Metro pass top-up", "category": "Transport",     "amount": "₹85.50"},
+        {"date": "2026-05-03", "description": "Electricity bill",  "category": "Bills",         "amount": "₹1,200.00"},
+        {"date": "2026-05-02", "description": "Pharmacy",          "category": "Health",        "amount": "₹450.00"},
+        {"date": "2026-05-01", "description": "Movie tickets",     "category": "Entertainment", "amount": "₹599.00"},
+    ]
+    breakdown = [
+        {"category": "Food",          "amount": "₹2,840.00", "pct": 34},
+        {"category": "Bills",         "amount": "₹2,400.00", "pct": 28},
+        {"category": "Shopping",      "amount": "₹1,850.00", "pct": 22},
+        {"category": "Transport",     "amount": "₹680.00",   "pct": 8},
+        {"category": "Health",        "amount": "₹450.00",   "pct": 5},
+        {"category": "Entertainment", "amount": "₹210.00",   "pct": 3},
+    ]
+    return render_template(
+        "profile.html",
+        user=user,
+        stats=stats,
+        transactions=transactions,
+        breakdown=breakdown,
+    )
 
 
 @app.route("/expenses/add")

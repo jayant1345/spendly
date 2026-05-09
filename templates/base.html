@@ -21,6 +21,7 @@
             <div class="nav-links">
                 {% if session.get('user_id') %}
                     <a href="{{ url_for('dashboard') }}">Dashboard</a>
+                    <a href="{{ url_for('profile') }}">Profile</a>
                     <form method="POST" action="{{ url_for('logout') }}" class="logout-form">
                         <button type="submit" class="nav-cta btn-logout">Sign out</button>
                     </form>
