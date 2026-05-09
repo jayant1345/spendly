@@ -1,17 +1,96 @@
 {% extends "base.html" %}
-
 {% block title %}Dashboard — Spendly{% endblock %}
 
 {% block content %}
-<section class="auth-section">
-    <div class="auth-container">
-        <div class="auth-header">
-            <h1 class="auth-title">Your Dashboard</h1>
-            <p class="auth-subtitle">
-                Welcome, {{ session.get('user_name') }}!
-                Full dashboard coming soon.
-            </p>
-        </div>
+<div class="profile-page">
+  <div class="profile-inner">
+
+    <div class="profile-user-card">
+      <div class="profile-avatar">{{ user.initials }}</div>
+      <div class="profile-user-info">
+        <h1 class="profile-name">{{ user.name }}</h1>
+        <p class="profile-meta">{{ user.email }}</p>
+        <p class="profile-meta profile-joined">Member since {{ user.joined }}</p>
+      </div>
     </div>
-</section>
+
+    <div class="profile-stats">
+      <div class="profile-stat-card">
+        <span class="profile-stat-label">Total Spent</span>
+        <span class="profile-stat-value">{{ stats.total_spent }}</span>
+      </div>
+      <div class="profile-stat-card">
+        <span class="profile-stat-label">Transactions</span>
+        <span class="profile-stat-value">{{ stats.transaction_count }}</span>
+      </div>
+      <div class="profile-stat-card">
+        <span class="profile-stat-label">Top Category</span>
+        <span class="profile-stat-value">{{ stats.top_category }}</span>
+      </div>
+    </div>
+
+    <div class="profile-bottom">
+
+      <div class="profile-section">
+        <h2 class="profile-section-title">All Expenses</h2>
+        {% if expenses %}
+        <div class="profile-table-wrap">
+          <table class="profile-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Description</th>
+                <th>Category</th>
+                <th class="col-amount">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for e in expenses %}
+              <tr>
+                <td>{{ e.date }}</td>
+                <td>{{ e.description }}</td>
+                <td>
+                  <span class="category-badge badge-{{ e.category | lower }}">{{ e.category }}</span>
+                </td>
+                <td class="col-amount"><span class="tx-amount">{{ e.amount }}</span></td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <p class="empty-state">No expenses yet. Start tracking your spending!</p>
+        {% endif %}
+      </div>
+
+      <div class="profile-section">
+        <h2 class="profile-section-title">By Category</h2>
+        {% if breakdown %}
+        <ul class="breakdown-list">
+          {% for row in breakdown %}
+          <li class="breakdown-item">
+            <div class="breakdown-meta">
+              <span class="breakdown-cat">{{ row.category }}</span>
+              <span class="breakdown-amount">{{ row.amount }}</span>
+            </div>
+            <div class="breakdown-track">
+              <div class="breakdown-bar bar-{{ row.category | lower }}"
+                   style="--bar-width: {{ row.pct }}%"></div>
+            </div>
+          </li>
+          {% endfor %}
+        </ul>
+        {% else %}
+        <p class="empty-state">No spending data yet.</p>
+        {% endif %}
+      </div>
+
+    </div>
+
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>lucide.createIcons();</script>
 {% endblock %}

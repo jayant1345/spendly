@@ -23,7 +23,7 @@ def login_required(f):
     @functools.wraps(f)
     def decorated(*args, **kwargs):
         if not session.get("user_id"):
-            return redirect(url_for("login"))
+            return redirect(url_for("login", next=request.path))
         return f(*args, **kwargs)
     return decorated
 
@@ -96,7 +96,80 @@ def register():
 @app.route("/dashboard")
 @login_required
 def dashboard():
-    return render_template("dashboard.html")
+    uid = session["user_id"]
+    db = get_db()
+    try:
+        user_row = db.execute(
+            "SELECT name, email, created_at FROM users WHERE id = ?", (uid,)
+        ).fetchone()
+        agg = db.execute(
+            "SELECT COUNT(*) as cnt, COALESCE(SUM(amount), 0) as total "
+            "FROM expenses WHERE user_id = ?", (uid,)
+        ).fetchone()
+        top_row = db.execute(
+            "SELECT category FROM expenses WHERE user_id = ? "
+            "GROUP BY category ORDER BY COUNT(*) DESC LIMIT 1", (uid,)
+        ).fetchone()
+        expense_rows = db.execute(
+            "SELECT date, description, category, amount FROM expenses "
+            "WHERE user_id = ? ORDER BY date DESC", (uid,)
+        ).fetchall()
+        cat_rows = db.execute(
+            "SELECT category, SUM(amount) as subtotal FROM expenses "
+            "WHERE user_id = ? GROUP BY category ORDER BY subtotal DESC", (uid,)
+        ).fetchall()
+    finally:
+        db.close()
+
+    parts = user_row["name"].split()
+    initials = "".join(p[0].upper() for p in parts[:2])
+
+    def fmt_date(iso):
+        try:
+            return datetime.strptime(iso, "%Y-%m-%d").strftime("%d %b %Y")
+        except (ValueError, TypeError):
+            return iso
+
+    try:
+        joined = datetime.strptime(user_row["created_at"], "%Y-%m-%d %H:%M:%S").strftime("%d %b %Y")
+    except (ValueError, TypeError):
+        joined = user_row["created_at"]
+
+    total = agg["total"]
+    user = {
+        "name": user_row["name"],
+        "email": user_row["email"],
+        "joined": joined,
+        "initials": initials,
+    }
+    stats = {
+        "total_spent": f"₹{total:,.2f}",
+        "transaction_count": agg["cnt"],
+        "top_category": top_row["category"] if top_row else "—",
+    }
+    expenses = [
+        {
+            "date": fmt_date(e["date"]),
+            "description": e["description"] or "—",
+            "category": e["category"],
+            "amount": f"₹{e['amount']:,.2f}",
+        }
+        for e in expense_rows
+    ]
+    breakdown = []
+    for c in cat_rows:
+        pct = round(c["subtotal"] / total * 100) if total else 0
+        breakdown.append({
+            "category": c["category"],
+            "amount": f"₹{c['subtotal']:,.2f}",
+            "pct": pct,
+        })
+
+    return render_template(
+        "dashboard.html",
+        user=user, stats=stats,
+        expenses=expenses, breakdown=breakdown,
+    )
 
 
 @app.route("/login", methods=["GET", "POST"])
@@ -123,11 +196,15 @@ def login():
                 else:
                     session["user_id"]   = user["id"]
                     session["user_name"] = user["name"]
+                    next_url = request.args.get("next", "")
+                    if next_url and next_url.startswith("/"):
+                        return redirect(next_url)
                     return redirect(url_for("dashboard"))
             finally:
                 db.close()
 
-    return render_template("login.html", error=error)
+    next_url = request.args.get("next", "")
+    return render_template("login.html", error=error, next_url=next_url)
 
 
 # ------------------------------------------------------------------ #
@@ -143,38 +220,7 @@ def logout():
 @app.route("/profile")
 @login_required
 def profile():
-    user = {
-        "name": "Priya Sharma",
-        "email": "priya.sharma@example.com",
-        "joined": "January 2026",
-    }
-    stats = {
-        "total_spent": "₹8,430.00",
-        "transaction_count": 12,
-        "top_category": "Food",
-    }
-    transactions = [
-        {"date": "2026-05-05", "description": "Grocery run",       "category": "Food",          "amount": "₹320.00"},
-        {"date": "2026-05-04", "description": "Metro pass top-up", "category": "Transport",     "amount": "₹85.50"},
-        {"date": "2026-05-03", "description": "Electricity bill",  "category": "Bills",         "amount": "₹1,200.00"},
-        {"date": "2026-05-02", "description": "Pharmacy",          "category": "Health",        "amount": "₹450.00"},
-        {"date": "2026-05-01", "description": "Movie tickets",     "category": "Entertainment", "amount": "₹599.00"},
-    ]
-    breakdown = [
-        {"category": "Food",          "amount": "₹2,840.00", "pct": 34},
-        {"category": "Bills",         "amount": "₹2,400.00", "pct": 28},
-        {"category": "Shopping",      "amount": "₹1,850.00", "pct": 22},
-        {"category": "Transport",     "amount": "₹680.00",   "pct": 8},
-        {"category": "Health",        "amount": "₹450.00",   "pct": 5},
-        {"category": "Entertainment", "amount": "₹210.00",   "pct": 3},
-    ]
-    return render_template(
-        "profile.html",
-        user=user,
-        stats=stats,
-        transactions=transactions,
-        breakdown=breakdown,
-    )
+    return redirect(url_for("dashboard"))
 
 
 @app.route("/expenses/add")
