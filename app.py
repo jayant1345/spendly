@@ -3,7 +3,7 @@ import re
 import functools
 from datetime import datetime, date, timedelta
 
-from flask import Flask, render_template, request, redirect, url_for, session
+from flask import Flask, render_template, request, redirect, url_for, session, abort
 from werkzeug.security import generate_password_hash, check_password_hash
 
 from database.db import get_db, init_db, seed_db
@@ -46,6 +46,23 @@ def _first_day_n_months_ago(n, from_date):
         m += 12
         y -= 1
     return date(y, m, 1)
+
+
+def _validate_expense_form(raw_amount, category, expense_date, description):
+    amount = None
+    try:
+        amount = float(raw_amount)
+        if amount <= 0 or amount > 1_000_000:
+            raise ValueError
+    except (ValueError, TypeError):
+        return None, "Amount must be a positive number."
+    if category not in CATEGORIES:
+        return None, "Please select a valid category."
+    if not _valid_date(expense_date):
+        return None, "Please enter a valid date."
+    if len(description) > 200:
+        return None, "Description must be 200 characters or fewer."
+    return amount, None
 
 
 # ------------------------------------------------------------------ #
@@ -167,7 +184,7 @@ def dashboard():
             " GROUP BY category ORDER BY COUNT(*) DESC LIMIT 1", params
         ).fetchone()
         expense_rows = db.execute(
-            "SELECT date, description, category, amount FROM expenses "
+            "SELECT id, date, description, category, amount FROM expenses "
             "WHERE " + where + " ORDER BY date DESC", params
         ).fetchall()
         cat_rows = db.execute(
@@ -199,6 +216,7 @@ def dashboard():
     }
     expenses = [
         {
+            "id": e["id"],
             "date": _fmt_date(e["date"]),
             "description": e["description"] or "—",
             "category": e["category"],
@@ -392,20 +410,7 @@ def add_expense():
         form = {"amount": raw_amount, "category": category,
                 "date": expense_date, "description": description}
 
-        amount = None
-        try:
-            amount = float(raw_amount)
-            if amount <= 0 or amount > 1_000_000:
-                raise ValueError
-        except (ValueError, TypeError):
-            error = "Amount must be a positive number."
-
-        if not error and category not in CATEGORIES:
-            error = "Please select a valid category."
-        if not error and not _valid_date(expense_date):
-            error = "Please enter a valid date."
-        if not error and len(description) > 200:
-            error = "Description must be 200 characters or fewer."
+        amount, error = _validate_expense_form(raw_amount, category, expense_date, description)
 
         if not error:
             db = get_db()
@@ -413,7 +418,7 @@ def add_expense():
                 db.execute(
                     "INSERT INTO expenses (user_id, amount, category, date, description)"
                     " VALUES (?, ?, ?, ?, ?)",
-                    (session["user_id"], amount, category, expense_date, description or None),
+                    (session["user_id"], amount, category, expense_date, description),
                 )
                 db.commit()
             finally:
@@ -425,12 +430,70 @@ def add_expense():
         error=error,
         categories=CATEGORIES,
         form=form,
+        page_title="Add Expense",
+        form_action=url_for("add_expense"),
+        submit_label="Add Expense",
+        subtitle="Record a new transaction to your account.",
     )
 
 
-@app.route("/expenses/<int:id>/edit")
+@app.route("/expenses/<int:id>/edit", methods=["GET", "POST"])
+@login_required
 def edit_expense(id):
-    return "Edit expense — coming in Step 8"
+    db = get_db()
+    try:
+        expense = db.execute(
+            "SELECT id, user_id, amount, category, date, description FROM expenses WHERE id = ?",
+            (id,)
+        ).fetchone()
+
+        if expense is None:
+            abort(404)
+        if expense["user_id"] != session["user_id"]:
+            abort(403)
+
+        error = None
+        form = {
+            "amount": f"{expense['amount']:g}",
+            "category": expense["category"],
+            "date": expense["date"],
+            "description": expense["description"] or "",
+        }
+
+        if request.method == "POST":
+            raw_amount   = request.form.get("amount", "").strip()
+            category     = request.form.get("category", "").strip()
+            expense_date = request.form.get("date", "").strip()
+            description  = request.form.get("description", "").strip()
+
+            form = {"amount": raw_amount, "category": category,
+                    "date": expense_date, "description": description}
+
+            amount, error = _validate_expense_form(raw_amount, category, expense_date, description)
+
+            if not error:
+                db.execute(
+                    "UPDATE expenses SET amount=?, category=?, date=?, description=?"
+                    " WHERE id=? AND user_id=?",
+                    (amount, category, expense_date, description,
+                     id, session["user_id"]),
+                )
+                db.commit()
+                return redirect(url_for("dashboard"))
+
+    finally:
+        db.close()
+
+    return render_template(
+        "expense_form.html",
+        error=error,
+        categories=CATEGORIES,
+        form=form,
+        page_title="Edit Expense",
+        form_action=url_for("edit_expense", id=id),
+        submit_label="Save Changes",
+        subtitle="Update the details of this expense.",
+    )
 
 
 @app.route("/expenses/<int:id>/delete")

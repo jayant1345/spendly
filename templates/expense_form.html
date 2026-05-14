@@ -1,13 +1,13 @@
 {% extends "base.html" %}
-{% block title %}Add Expense — Spendly{% endblock %}
+{% block title %}{{ page_title }} — Spendly{% endblock %}
 
 {% block content %}
 <section class="auth-section">
   <div class="auth-container">
 
     <div class="auth-header">
-      <h1>Add Expense</h1>
-      <p>Record a new transaction to your account.</p>
+      <h1>{{ page_title }}</h1>
+      <p>{{ subtitle }}</p>
     </div>
 
     <div class="auth-card">
@@ -15,7 +15,7 @@
       <div class="auth-error">{{ error }}</div>
       {% endif %}
 
-      <form method="POST" action="{{ url_for('add_expense') }}">
+      <form method="POST" action="{{ form_action }}">
 
         <div class="form-group">
           <label for="amount">Amount (₹)</label>
@@ -49,7 +49,7 @@
                  value="{{ form.description }}">
         </div>
 
-        <button type="submit" class="btn-submit">Add Expense</button>
+        <button type="submit" class="btn-submit">{{ submit_label }}</button>
 
       </form>
     </div>
