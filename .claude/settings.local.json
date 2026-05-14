@@ -10,7 +10,11 @@
       "Bash(Select-Object -First 50 FullName)",
       "Bash(python -m pytest tests/test_06-date-filter-profile.py -v)",
       "Bash(python -m pytest tests/test_06-date-filter-profile.py::TestEdgeCasesAndValidation::test_malformed_month_parameter_fallback -v -s)",
-      "Bash(python -c ' *)"
+      "Bash(python -c ' *)",
+      "Bash(dir *)",
+      "Bash(python -m pytest tests/test_08-edit-expense.py -v)",
+      "Bash(python -m pytest \"tests/test_08-edit-expense.py::TestEditExpenseEdgeCases::test_edit_expense_empty_description_allowed\" -v)",
+      "Bash(python -m pytest \"tests/test_08-edit-expense.py\" -v)"
     ]
   }
 }
