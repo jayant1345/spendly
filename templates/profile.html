@@ -29,6 +29,20 @@
       </div>
     </div>
 
+    <div class="profile-filter">
+      <form class="profile-filter-form" method="GET" action="{{ url_for('profile') }}">
+        <input class="form-input profile-filter-input"
+               type="month" name="month" value="{{ active_month }}">
+        <button class="btn-primary profile-filter-btn" type="submit">Filter</button>
+        {% if active_month %}
+        <a class="btn-ghost profile-filter-clear" href="{{ url_for('profile') }}">Clear</a>
+        {% endif %}
+      </form>
+      {% if display_month %}
+      <p class="profile-filter-label">Showing: <strong>{{ display_month }}</strong></p>
+      {% endif %}
+    </div>
+
     <div class="profile-bottom">
 
       <div class="profile-section">

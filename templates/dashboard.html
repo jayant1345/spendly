@@ -29,6 +29,39 @@
       </div>
     </div>
 
+    <div class="profile-filter">
+      <div class="filter-pills">
+        {% for p in presets %}
+          {% if p.date_from == "" %}
+          <a href="{{ url_for('dashboard') }}"
+             class="filter-pill {% if not is_filtered %}filter-pill-active{% endif %}">
+            {{ p.label }}
+          </a>
+          {% else %}
+          <a href="{{ url_for('dashboard', date_from=p.date_from, date_to=p.date_to) }}"
+             class="filter-pill {% if active_from == p.date_from and active_to == p.date_to %}filter-pill-active{% endif %}">
+            {{ p.label }}
+          </a>
+          {% endif %}
+        {% endfor %}
+      </div>
+      <form class="profile-filter-form" method="GET" action="{{ url_for('dashboard') }}">
+        <div class="filter-date-group">
+          <label class="filter-date-label">From</label>
+          <input class="form-input profile-filter-input"
+                 type="date" name="date_from"
+                 value="{{ active_from or default_from }}">
+        </div>
+        <div class="filter-date-group">
+          <label class="filter-date-label">To</label>
+          <input class="form-input profile-filter-input"
+                 type="date" name="date_to"
+                 value="{{ active_to or default_to }}">
+        </div>
+        <button class="btn-primary profile-filter-btn" type="submit">Apply</button>
+      </form>
+    </div>
+
     <div class="profile-bottom">
 
       <div class="profile-section">
