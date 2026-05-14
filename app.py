@@ -8,6 +8,11 @@ from werkzeug.security import generate_password_hash, check_password_hash
 
 from database.db import get_db, init_db, seed_db
 
+CATEGORIES = [
+    "Bills", "Education", "Entertainment",
+    "Food", "Health", "Other", "Shopping", "Transport",
+]
+
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-change-in-prod")
 
@@ -371,9 +376,56 @@ def profile():
     )
 
 
-@app.route("/expenses/add")
+@app.route("/expenses/add", methods=["GET", "POST"])
+@login_required
 def add_expense():
-    return "Add expense — coming in Step 7"
+    error = None
+    today = datetime.now().strftime("%Y-%m-%d")
+    form = {"amount": "", "category": "", "date": today, "description": ""}
+
+    if request.method == "POST":
+        raw_amount  = request.form.get("amount", "").strip()
+        category    = request.form.get("category", "").strip()
+        expense_date = request.form.get("date", "").strip()
+        description  = request.form.get("description", "").strip()
+
+        form = {"amount": raw_amount, "category": category,
+                "date": expense_date, "description": description}
+
+        amount = None
+        try:
+            amount = float(raw_amount)
+            if amount <= 0 or amount > 1_000_000:
+                raise ValueError
+        except (ValueError, TypeError):
+            error = "Amount must be a positive number."
+
+        if not error and category not in CATEGORIES:
+            error = "Please select a valid category."
+        if not error and not _valid_date(expense_date):
+            error = "Please enter a valid date."
+        if not error and len(description) > 200:
+            error = "Description must be 200 characters or fewer."
+
+        if not error:
+            db = get_db()
+            try:
+                db.execute(
+                    "INSERT INTO expenses (user_id, amount, category, date, description)"
+                    " VALUES (?, ?, ?, ?, ?)",
+                    (session["user_id"], amount, category, expense_date, description or None),
+                )
+                db.commit()
+            finally:
+                db.close()
+            return redirect(url_for("dashboard"))
+
+    return render_template(
+        "expense_form.html",
+        error=error,
+        categories=CATEGORIES,
+        form=form,
+    )
 
 
 @app.route("/expenses/<int:id>/edit")
