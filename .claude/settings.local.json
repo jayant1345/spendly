@@ -3,7 +3,9 @@
     "allow": [
       "WebSearch",
       "PowerShell(venv\\\\Scripts\\\\python.exe -c \"import app; print\\('OK'\\)\")",
-      "Bash(venv/Scripts/python.exe *)"
+      "Bash(venv/Scripts/python.exe *)",
+      "Bash(claude mcp *)",
+      "mcp__sqlite__read_query"
     ]
   }
 }
