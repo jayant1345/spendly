@@ -5,7 +5,12 @@
       "PowerShell(venv\\\\Scripts\\\\python.exe -c \"import app; print\\('OK'\\)\")",
       "Bash(venv/Scripts/python.exe *)",
       "Bash(claude mcp *)",
-      "mcp__sqlite__read_query"
+      "mcp__sqlite__read_query",
+      "Bash(Get-ChildItem -Path \"C:\\\\Project_AI\\\\expense-tracker\" -Recurse -Force)",
+      "Bash(Select-Object -First 50 FullName)",
+      "Bash(python -m pytest tests/test_06-date-filter-profile.py -v)",
+      "Bash(python -m pytest tests/test_06-date-filter-profile.py::TestEdgeCasesAndValidation::test_malformed_month_parameter_fallback -v -s)",
+      "Bash(python -c ' *)"
     ]
   }
 }

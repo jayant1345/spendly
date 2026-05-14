@@ -1,6 +1,7 @@
 import os
+import re
 import functools
-from datetime import datetime
+from datetime import datetime, date, timedelta
 
 from flask import Flask, render_template, request, redirect, url_for, session
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -13,6 +14,33 @@ app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-change-in-prod")
 with app.app_context():
     init_db()
     seed_db()
+
+
+# ------------------------------------------------------------------ #
+# Helpers                                                             #
+# ------------------------------------------------------------------ #
+
+def _valid_date(s):
+    try:
+        datetime.strptime(s, "%Y-%m-%d")
+        return True
+    except (ValueError, TypeError):
+        return False
+
+
+def _fmt_date(iso):
+    try:
+        return datetime.strptime(iso, "%Y-%m-%d").strftime("%d %b %Y")
+    except (ValueError, TypeError):
+        return iso
+
+
+def _first_day_n_months_ago(n, from_date):
+    m, y = from_date.month - n, from_date.year
+    while m <= 0:
+        m += 12
+        y -= 1
+    return date(y, m, 1)
 
 
 # ------------------------------------------------------------------ #
@@ -97,6 +125,29 @@ def register():
 @login_required
 def dashboard():
     uid = session["user_id"]
+    today = datetime.now()
+
+    raw_from = request.args.get("date_from", "").strip()
+    raw_to   = request.args.get("date_to",   "").strip()
+    active_from = raw_from if _valid_date(raw_from) else ""
+    active_to   = raw_to   if _valid_date(raw_to)   else ""
+
+    if active_from and active_to and active_from > active_to:
+        active_from, active_to = active_to, active_from
+
+    default_from = today.replace(day=1).strftime("%Y-%m-%d")
+    default_to   = today.strftime("%Y-%m-%d")
+
+    clauses = ["user_id = ?"]
+    params  = [uid]
+    if active_from:
+        clauses.append("date >= ?")
+        params.append(active_from)
+    if active_to:
+        clauses.append("date <= ?")
+        params.append(active_to)
+    where = " AND ".join(clauses)
+
     db = get_db()
     try:
         user_row = db.execute(
@@ -104,31 +155,25 @@ def dashboard():
         ).fetchone()
         agg = db.execute(
             "SELECT COUNT(*) as cnt, COALESCE(SUM(amount), 0) as total "
-            "FROM expenses WHERE user_id = ?", (uid,)
+            "FROM expenses WHERE " + where, params
         ).fetchone()
         top_row = db.execute(
-            "SELECT category FROM expenses WHERE user_id = ? "
-            "GROUP BY category ORDER BY COUNT(*) DESC LIMIT 1", (uid,)
+            "SELECT category FROM expenses WHERE " + where +
+            " GROUP BY category ORDER BY COUNT(*) DESC LIMIT 1", params
         ).fetchone()
         expense_rows = db.execute(
             "SELECT date, description, category, amount FROM expenses "
-            "WHERE user_id = ? ORDER BY date DESC", (uid,)
+            "WHERE " + where + " ORDER BY date DESC", params
         ).fetchall()
         cat_rows = db.execute(
             "SELECT category, SUM(amount) as subtotal FROM expenses "
-            "WHERE user_id = ? GROUP BY category ORDER BY subtotal DESC", (uid,)
+            "WHERE " + where + " GROUP BY category ORDER BY subtotal DESC", params
         ).fetchall()
     finally:
         db.close()
 
     parts = user_row["name"].split()
     initials = "".join(p[0].upper() for p in parts[:2])
-
-    def fmt_date(iso):
-        try:
-            return datetime.strptime(iso, "%Y-%m-%d").strftime("%d %b %Y")
-        except (ValueError, TypeError):
-            return iso
 
     try:
         joined = datetime.strptime(user_row["created_at"], "%Y-%m-%d %H:%M:%S").strftime("%d %b %Y")
@@ -149,7 +194,7 @@ def dashboard():
     }
     expenses = [
         {
-            "date": fmt_date(e["date"]),
+            "date": _fmt_date(e["date"]),
             "description": e["description"] or "—",
             "category": e["category"],
             "amount": f"₹{e['amount']:,.2f}",
@@ -165,10 +210,27 @@ def dashboard():
             "pct": pct,
         })
 
+    td = today.date()
+    first_this   = td.replace(day=1)
+    last_m_start = _first_day_n_months_ago(1, first_this)
+    last_m_end   = first_this - timedelta(days=1)
+
+    presets = [
+        {"label": "All time",      "date_from": "",                                                         "date_to": ""},
+        {"label": "This month",    "date_from": first_this.strftime("%Y-%m-%d"),                             "date_to": td.strftime("%Y-%m-%d")},
+        {"label": "Last month",    "date_from": last_m_start.strftime("%Y-%m-%d"),                          "date_to": last_m_end.strftime("%Y-%m-%d")},
+        {"label": "Last 3 months", "date_from": _first_day_n_months_ago(3, first_this).strftime("%Y-%m-%d"), "date_to": td.strftime("%Y-%m-%d")},
+        {"label": "Last 6 months", "date_from": _first_day_n_months_ago(6, first_this).strftime("%Y-%m-%d"), "date_to": td.strftime("%Y-%m-%d")},
+    ]
+
+    is_filtered = bool(active_from or active_to)
     return render_template(
         "dashboard.html",
         user=user, stats=stats,
         expenses=expenses, breakdown=breakdown,
+        active_from=active_from, active_to=active_to,
+        default_from=default_from, default_to=default_to,
+        is_filtered=is_filtered, presets=presets,
     )
 
 
@@ -220,7 +282,93 @@ def logout():
 @app.route("/profile")
 @login_required
 def profile():
-    return redirect(url_for("dashboard"))
+    uid = session["user_id"]
+    raw_month = request.args.get("month", "").strip()
+    m = re.match(r'^(\d{4})-(\d{2})$', raw_month)
+    active_month = raw_month if m and 1 <= int(m.group(2)) <= 12 else ""
+
+    clauses = ["user_id = ?"]
+    params  = [uid]
+    if active_month:
+        clauses.append("strftime('%Y-%m', date) = ?")
+        params.append(active_month)
+    where = " AND ".join(clauses)
+
+    db = get_db()
+    try:
+        user_row = db.execute(
+            "SELECT name, email, created_at FROM users WHERE id = ?", (uid,)
+        ).fetchone()
+        agg = db.execute(
+            "SELECT COUNT(*) as cnt, COALESCE(SUM(amount), 0) as total "
+            "FROM expenses WHERE " + where, params
+        ).fetchone()
+        top_row = db.execute(
+            "SELECT category FROM expenses WHERE " + where +
+            " GROUP BY category ORDER BY COUNT(*) DESC LIMIT 1", params
+        ).fetchone()
+        expense_rows = db.execute(
+            "SELECT date, description, category, amount FROM expenses "
+            "WHERE " + where + " ORDER BY date DESC", params
+        ).fetchall()
+        cat_rows = db.execute(
+            "SELECT category, SUM(amount) as subtotal FROM expenses "
+            "WHERE " + where + " GROUP BY category ORDER BY subtotal DESC", params
+        ).fetchall()
+    finally:
+        db.close()
+
+    parts = user_row["name"].split()
+    initials = "".join(p[0].upper() for p in parts[:2])
+
+    try:
+        joined = datetime.strptime(user_row["created_at"], "%Y-%m-%d %H:%M:%S").strftime("%d %b %Y")
+    except (ValueError, TypeError):
+        joined = user_row["created_at"]
+
+    display_month = ""
+    if active_month:
+        try:
+            display_month = datetime.strptime(active_month, "%Y-%m").strftime("%B %Y")
+        except ValueError:
+            pass
+
+    total = agg["total"]
+    user = {
+        "name": user_row["name"],
+        "email": user_row["email"],
+        "joined": joined,
+        "initials": initials,
+    }
+    stats = {
+        "total_spent": f"₹{total:,.2f}",
+        "transaction_count": agg["cnt"],
+        "top_category": top_row["category"] if top_row else "—",
+    }
+    transactions = [
+        {
+            "date": _fmt_date(e["date"]),
+            "description": e["description"] or "—",
+            "category": e["category"],
+            "amount": f"₹{e['amount']:,.2f}",
+        }
+        for e in expense_rows
+    ]
+    breakdown = []
+    for c in cat_rows:
+        pct = round(c["subtotal"] / total * 100) if total else 0
+        breakdown.append({
+            "category": c["category"],
+            "amount": f"₹{c['subtotal']:,.2f}",
+            "pct": pct,
+        })
+
+    return render_template(
+        "profile.html",
+        user=user, stats=stats,
+        transactions=transactions, breakdown=breakdown,
+        active_month=active_month, display_month=display_month,
+    )
 
 
 @app.route("/expenses/add")
@@ -239,4 +387,4 @@ def delete_expense(id):
 
 
 if __name__ == "__main__":
-    app.run(debug=True, port=5001)
+    app.run(debug=os.environ.get("FLASK_DEBUG", "false").lower() == "true", port=5001)
