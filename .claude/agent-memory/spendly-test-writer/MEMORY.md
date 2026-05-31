@@ -1,0 +1,1 @@
+- [Test Patterns for Spendly](test-patterns.md) — Common fixture conventions, assertion patterns, and test organization used in Spendly pytest tests
